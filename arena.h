@@ -38,6 +38,7 @@ u64 max(int x, int y);
 //NOTE Arena is itself the memory buffer, it contains it's header which is ARENA_HEADER_SIZE then data section starts after that
 //We do this to avoid having to load a separate address to start allocating into and instead can have mostly contiguous memory in our arena
 Arena *arena_init(u64 commit_size, u64 reserve_size);
+Arena *arena_back_buffer_init(char back_buffer[], u64 commit_size, u64 reserve_size);
 void *arena_push(Arena *arena, size_t size, u64 alignment);
 void arena_pop_to(Arena *arena, u64 pos);
 void arena_pop(Arena *arena, u64 amount);
@@ -60,6 +61,15 @@ Arena *arena_init(u64 commit_size, u64 reserve_size) {
   mprotect(arena, commit_size, PROT_WRITE | PROT_READ);
   arena->commit_size = commit_size;
   arena->reserve_size = reserve_size;
+  arena->first_free_pos = ARENA_HEADER_SIZE;
+  return arena;
+}
+
+Arena *arena_back_buffer_init(char back_buffer[], u64 commit_size, u64 reserve_size) {
+  Arena *arena          = (Arena *)back_buffer;
+  
+  arena->commit_size    = commit_size;
+  arena->reserve_size   = reserve_size;
   arena->first_free_pos = ARENA_HEADER_SIZE;
   return arena;
 }

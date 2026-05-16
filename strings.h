@@ -1,6 +1,8 @@
 #ifndef GOOTS_STRINGS_H
 #define GOOTS_STRINGS_H
 
+#define EachIndex(it, count) (u64 it = 0; it < (count); it += 1)
+
 typedef struct {
   char *data;
   u64 size;
@@ -8,9 +10,13 @@ typedef struct {
 
 int string8_len(char *s);
 String8 string8_from_lit(char *s);
+//TODO: Should these all that take arenas instead just make scratch arenas YOU send the memory?
 void string8_expand(Arena *arena, String8 *str_8, u64 expand_mult);
+//TODO: We might want to always \0 the next byte in all the allocations strings
 void string8_concat(Arena *arena, String8 *str_8, char *new_data);
+String8 string8_clone(Arena *arena, String8 str_8);
 void string8_append(Arena *arena, String8 *str_8, char new_data);
+String8 string8_to_lower(Arena *arena, String8 str_8);
 bool string8_contains_char(String8 str_8, char comparator);
 
 #endif //GOOTS_STRINGS_H
@@ -58,10 +64,13 @@ void string8_append(Arena *arena, String8 *str_8, char new_data) {
   str_8->size += 1;
 }
 
-void string8_clone(Arena *arena, String8 *s1, String8 *s2) {
-  s1->data = arena_push(arena, s2->size, alignof(char));
-  memcpy(s1->data, s2->data, sizeof(char) * s2->size);
-  s1->size = s2->size;
+String8 string8_clone(Arena *arena, String8 s) {
+  String8 res = {0};
+  res.data = arena_push(arena, s.size + 1, alignof(char));
+  memcpy(res.data, s.data, sizeof(char) * s.size);
+  res.size = s.size;
+  res.data[res.size] = 0;
+  return res;
 }
 
 bool string8_compare(String8 s1, String8 s2) {
@@ -87,5 +96,18 @@ bool string8_contains_char(String8 str_8, char comparator) {
     count += 1;
   }
   return found;
+}
+
+String8 string8_to_lower(Arena *arena, String8 str_8) {
+  String8 new_str = {0};
+  new_str.data = arena_push(arena, str_8.size, alignof(char));
+  for EachIndex(i, str_8.size) {
+    char curr_char = str_8.data[i];
+    if (curr_char >= 'A' && curr_char <= 'Z') {
+      curr_char += 32;
+    }
+    string8_append(arena, &new_str, curr_char);
+  }
+  return new_str;
 }
 #endif // GOOTS_ARENA_IMPL
