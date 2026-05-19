@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <math.h>
+#include "raylib/src/raylib.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -24,6 +25,10 @@ typedef enum {
   VALUE,
 } TokenKind;
 
+typedef enum {
+  NUMBER,
+  VARCHAR,
+} ColumnType;
 
 typedef struct {
   TokenKind kind;
@@ -38,6 +43,21 @@ typedef struct {
 typedef struct {
   u64 id;
   String8 name; 
+} UserRow;
+
+typedef struct {
+  UserRow *rows; //Rows could just be an arena the thing we lose here is the ability to prev + next for the rows
+  Arena *arena;
+  //We could add an arena to the table that contains all the rows, then a row is a pointer into this arena with 
+  //next + prev
+  //Add some header info for the table about the rows
+  u64 row_count;
+  u64 row_size;
+  
+  //These should just be a hash map
+  u64 column_count;
+  ColumnType columns[2]; //Defines order and types for each column for indexing
+  String8 column_names[2];
 } UserTable;
 
 String8 read_until_delimeter(Arena *arena, String8 str, String8 delimeters) {
@@ -61,7 +81,6 @@ String8 read_until_delimeter(Arena *arena, String8 str, String8 delimeters) {
   return res;
 }
 
-//TODO: have an arena for  tokens and arena for values, the value for a token points to an addr in value arena
 TokenArray parse_query(Arena *token_arena, Arena *value_arena, String8 str) {
   TokenArray token_array = {0};
   
@@ -96,11 +115,11 @@ TokenArray parse_query(Arena *token_arena, Arena *value_arena, String8 str) {
       tok->kind = INSERT;
     } else {
       tok->kind = VALUE;
+      String8 value = string8_clone(value_arena, token_from_query);
+      tok->value = value;
     }
-    String8 value = string8_clone(value_arena, token_from_query);
     scratch_end(&scratch);
     
-    tok->value = value;
     token_array.tokens = tok;
     token_array.tokens += 1;
     token_count += 1;
@@ -113,51 +132,35 @@ TokenArray parse_query(Arena *token_arena, Arena *value_arena, String8 str) {
   return token_array;
 }
 
+u64 user_table_column_get(UserTable table, String8 column_name){
+  u64 index = 0;
+  
+  for (;index < 2; ++index) {
+    if (string8_compare(table.column_names[index], column_name)) {
+      break;
+    }
+  }
+  
+  return index;
+}
+
 int main() {
   Arena *arena = arena_init(COMMIT_SIZE, RESERVE_SIZE);
   Arena *token_arena = arena_init(COMMIT_SIZE, RESERVE_SIZE);
-  Arena *value_arena = arena_init(COMMIT_SIZE, RESERVE_SIZE);
+  Arena *value_arena = arena_init(COMMIT_SIZE, RESERVE_SIZE); //Growing string arena
   Arena *quick_temp = arena_init(1024, 1024);
   int base_size = 256;
-  
-#if 0
-  String8 query = string8_from_lit("query something");
-  bool found = string8_contains_char(string8_from_lit("\n "), ' ');
-  printf("%d\n", found);
-  String8 str = read_until_delimeter(arena, query, string8_from_lit("\n "));
-  printf("%s\n", str.data);
-  String8 test_str = string8_from_lit("query");
-  printf("%d\n", string8_compare(str, test_str));
-  TokenArray token_array = parse_query(token_arena, value_arena, string8_from_lit("select SELECT INSERT insert matth"));
-  int x = 1;
-  for EachIndex(i, token_array.count) {
-    Token token = token_array.tokens[i];
-    char *kind_value = "";
-    switch (token.kind) {
-      case INSERT:
-      kind_value = "INSERT";
-      //insert into our table (later this could use a from)
-      break;
-      case SELECT:
-      kind_value = "SELECT";
-      break;
-      case VALUE:
-      kind_value = "VALUE";
-      break;
-      default:
-      break;
-    }
-    printf("%s ", kind_value);
-    printf("%s\n", token.value.data);
-  }
-  
-#endif
-  
-#if 1
   char *test_s = arena_push(arena, sizeof(char) * base_size, alignof(char));
   String8 str_8 = {0};
   str_8.data = test_s;
-  
+  UserTable table = {0};
+  table.arena = arena_init(100 * sizeof(UserRow), 100 * sizeof(UserRow));
+  //TODO: I don't like this
+  table.columns[0] = NUMBER;
+  table.column_names[0] = string8_from_lit("id");
+  table.columns[1] = VARCHAR;
+  table.column_names[1] = string8_from_lit("name");
+  table.row_size = sizeof(String8) + sizeof(u64);
   while (true) {
     printf("db >> ");
     fgets(str_8.data, base_size, stdin);
@@ -169,35 +172,95 @@ int main() {
       string8_concat(arena, &str_8, temp);
       arena_pop_to(quick_temp, 0);
     }
-    
     printf("%s", str_8.data);
+    
     TokenArray token_array = parse_query(token_arena, value_arena, str_8);
     arena_pop_to(arena, 0);
-    for EachIndex(i, token_array.count) {
-      Token token = token_array.tokens[i];
-      char *kind_value = "";
-      switch (token.kind) {
-        case INSERT:
-        kind_value = "INSERT";
-        break;
-        case SELECT:
-        kind_value = "SELECT";
-        break;
-        case VALUE:
-        kind_value = "VALUE";
-        break;
-        default:
-        break;
-      }
-      printf("%s ", kind_value);
-      printf("%s\n", token.value.data);
-    }
+    arena_pop_to(quick_temp, 0);
     
-  }
-  
-#endif
-  arena_destroy(quick_temp);
+    Token first_token = token_array.tokens[0];
+    char *kind_value = "";
+    switch (first_token.kind) {
+      case INSERT: 
+      {
+        kind_value = "INSERT";
+        
+        int value_count = 0;
+        //TODO: we don't want this token count because our inserting will change depending on our data structure
+        for (int i = 1; i < token_array.count; ++i) {
+          Token token = token_array.tokens[i];
+          if (token.kind != VALUE) {
+            continue;
+          }
+          u64 *id = arena_push(table.arena, sizeof(u64), alignof(u64));
+          String8 *name = arena_push(table.arena, sizeof(String8), alignof(String8));
+          *id = table.row_count + 1;
+          *name = string8_clone(table.arena, token.value);
+          table.row_count += 1;
+          printf(" INSERTING: ");
+          printf("%s\n", token.value.data);
+        }
+        
+
+      break;
+     }      
+    
+      case SELECT: 
+      {
+      int value_count = 0;
+      int cols = 0;
+      kind_value = "SELECT";
+        //TODO: we don't want this token count because our inserting will change depending on our data structure
+        for (int i = 1; i < token_array.count; ++i) {
+          Token token = token_array.tokens[i];
+          if (token.kind != VALUE) {
+            continue;
+          }
+          if (string8_compare(token.value, string8_from_lit("*"))) {
+            //select all
+            for (int i = 0; i < table.row_count; ++i) {
+            //TODO: This fails on a multiple rows right now we need to know how big the previous row was (this varies because of the String8)
+              UserRow *row = (UserRow *)((char *)(table.arena) + ARENA_HEADER_SIZE);
+              printf(" value %lu: ", row->id);
+              printf("%s\n", row->name.data);
+            }
+            break;
+          } else {
+            //We need to know the size of the column and what it's offset into the row is
+            u64 index = user_table_column_get(table, token.value);
+            u64 offset = 0;
+            ColumnType column_kind = table.columns[index];
+            switch(column_kind) {
+              case NUMBER:
+              offset = sizeof(u64);
+              break;
+              case VARCHAR:
+              offset = sizeof(String8);
+              break;
+            }
+            for (int i = 0; i < table.row_count; ++i) {
+              UserRow row = table.rows[i];
+              printf(" Value %lu: ", row.id);
+              printf("%s\n", row.name.data);
+            }
+          }
+        }
+        //match on value names for the columns to select
+
+      break;
+      }
+      
+      case VALUE:
+      kind_value = "VALUE";
+      break;
+      default:
+      break;
+    }    
+    arena_pop_to(token_arena, 0);
+    arena_pop_to(token_arena, 0);
+  } // main loop
   arena_destroy(arena);
-  
+  //TODO: For some reason if thsi is destroyed before doing any of the query stuff we seg fault
+  arena_destroy(quick_temp);
   return 0;
 }

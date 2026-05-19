@@ -1,3 +1,6 @@
+//TODO:
+// Add some tracking arena? To track my arenas
+// Maybe add some gui thing to see the tracked arenas as well
 #ifndef GOOTS_ARENA_H
 #define GOOTS_ARENA_H
 
@@ -19,6 +22,9 @@
 #define STATIC  0x00000000
 #define GROWING 0x00000001
 
+bool is_power_of_two(int x);
+u64 max(int x, int y);
+
 typedef struct {
   //TODO add next a prev arenas so we can chain them
   u64 reserve_size;
@@ -26,14 +32,6 @@ typedef struct {
   u64 commit_size;
   u64 commited;
 } Arena;
-
-typedef struct {
-  Arena *arena;
-  u64   base_pos;
-} Scratch;
-
-bool is_power_of_two(int x);
-u64 max(int x, int y);
 
 //NOTE Arena is itself the memory buffer, it contains it's header which is ARENA_HEADER_SIZE then data section starts after that
 //We do this to avoid having to load a separate address to start allocating into and instead can have mostly contiguous memory in our arena
@@ -43,6 +41,11 @@ void *arena_push(Arena *arena, size_t size, u64 alignment);
 void arena_pop_to(Arena *arena, u64 pos);
 void arena_pop(Arena *arena, u64 amount);
 void arena_destroy(Arena *arena);
+
+typedef struct {
+  Arena *arena;
+  u64   base_pos;
+} Scratch;
 
 Scratch scratch_begin(Arena *arena);
 void scratch_end(Scratch *scratch);
@@ -62,6 +65,7 @@ Arena *arena_init(u64 commit_size, u64 reserve_size) {
   arena->commit_size = commit_size;
   arena->reserve_size = reserve_size;
   arena->first_free_pos = ARENA_HEADER_SIZE;
+  arena->commited += commit_size;
   return arena;
 }
 
@@ -69,6 +73,7 @@ Arena *arena_back_buffer_init(char back_buffer[], u64 commit_size, u64 reserve_s
   Arena *arena          = (Arena *)back_buffer;
   
   arena->commit_size    = commit_size;
+  arena->commited      += commit_size;
   arena->reserve_size   = reserve_size;
   arena->first_free_pos = ARENA_HEADER_SIZE;
   return arena;
@@ -80,7 +85,8 @@ void *arena_push(Arena *arena, size_t size, u64 alignment) {
   u64 pos = AlignPow2(arena->first_free_pos, alignment);
   
   if (pos + size >= arena->commit_size) { 
-    mprotect(arena, arena->commit_size, PROT_READ | PROT_WRITE);
+    mprotect(arena + pos, arena->commit_size, PROT_READ | PROT_WRITE);
+    arena->commited += arena->commit_size;
   }
   
   if (pos + size <= arena->commit_size) { 
@@ -88,17 +94,21 @@ void *arena_push(Arena *arena, size_t size, u64 alignment) {
     void *ptr = (char *) arena + pos;
     arena->first_free_pos +=size;
     memset(ptr, 0, size);
+    //TODO add ASAN UNPOISON
     return ptr;
   }
   
   //NOTE I don't like return NULL should do something else if we have no memory to return
-  return NULL;
+  fprintf(stderr, "panic: RAN OUT OF MEMORY\n");
+  exit(1);
 }
 
 void arena_pop_to(Arena *arena, u64 pos) {
-  u64 _pos = Clamp(pos, ARENA_HEADER_SIZE, arena->reserve_size);
+  u64 _pos = Clamp(pos, ARENA_HEADER_SIZE, arena->commited);
   u64 diff = arena->first_free_pos - _pos;
+  
   memset((char *)arena + _pos, 0, diff);
+  //TODO: Add ASAN poison
   arena->first_free_pos = _pos;
 }
 

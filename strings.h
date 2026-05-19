@@ -52,6 +52,7 @@ void string8_concat(Arena *arena, String8 *str_8, char *new_data) {
   }
   memcpy(str_8->data + str_8->size, new_data, sizeof(char) * new_data_len);
   str_8->size += new_data_len;
+  str_8->data[str_8->size] = 0;
 }
 
 
