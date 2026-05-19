@@ -7,7 +7,6 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <math.h>
-#include "raylib/src/raylib.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -40,13 +39,21 @@ typedef struct {
   u64   count;
 } TokenArray;
 
-typedef struct {
-  u64 id;
-  String8 name; 
-} UserRow;
+typedef struct UserRow UserRow;
+struct UserRow {
+  u64     id;
+  String8 name;
+};
+
+typedef struct RowHeader RowHeader;
+struct RowHeader {
+  RowHeader *next;
+  RowHeader *prev;
+};
 
 typedef struct {
-  UserRow *rows; //Rows could just be an arena the thing we lose here is the ability to prev + next for the rows
+  RowHeader *first; //Rows could just be an arena the thing we lose here is the ability to prev + next for the rows
+  RowHeader *last_added;
   Arena *arena;
   //We could add an arena to the table that contains all the rows, then a row is a pointer into this arena with 
   //next + prev
@@ -187,15 +194,23 @@ int main() {
         
         int value_count = 0;
         //TODO: we don't want this token count because our inserting will change depending on our data structure
+        RowHeader *prev = table.last_added;
         for (int i = 1; i < token_array.count; ++i) {
           Token token = token_array.tokens[i];
           if (token.kind != VALUE) {
             continue;
           }
-          u64 *id = arena_push(table.arena, sizeof(u64), alignof(u64));
-          String8 *name = arena_push(table.arena, sizeof(String8), alignof(String8));
-          *id = table.row_count + 1;
-          *name = string8_clone(table.arena, token.value);
+          RowHeader *base = arena_push(table.arena, sizeof(RowHeader), alignof(RowHeader));
+          UserRow *row_data = arena_push(table.arena, sizeof(UserRow), alignof(UserRow));
+          row_data->id = table.row_count + 1;
+          row_data->name = string8_clone(table.arena, token.value);
+          if (table.row_count == 0) {
+            table.first = base;
+            table.last_added = table.first;
+          } else {
+            table.last_added->next = (void *)base;
+            table.last_added = base;
+          }
           table.row_count += 1;
           printf(" INSERTING: ");
           printf("%s\n", token.value.data);
@@ -218,11 +233,17 @@ int main() {
           }
           if (string8_compare(token.value, string8_from_lit("*"))) {
             //select all
+            u64 offset = 0;
+            RowHeader *curr = table.first;
+            RowHeader *prev = curr;
             for (int i = 0; i < table.row_count; ++i) {
             //TODO: This fails on a multiple rows right now we need to know how big the previous row was (this varies because of the String8)
-              UserRow *row = (UserRow *)((char *)(table.arena) + ARENA_HEADER_SIZE);
-              printf(" value %lu: ", row->id);
+              UserRow *row = (UserRow *)((char *)curr + sizeof(RowHeader) + offset);
+              printf(" Value %lu: ", row->id);
               printf("%s\n", row->name.data);
+//              offset += sizeof(row->id) + row->name.size + sizeof(String8);
+              prev = curr;
+              curr = prev->next;
             }
             break;
           } else {
@@ -238,10 +259,13 @@ int main() {
               offset = sizeof(String8);
               break;
             }
+            RowHeader *curr = table.first;
+            RowHeader *prev = curr;
+            u64 size_of_prev = 0;
             for (int i = 0; i < table.row_count; ++i) {
-              UserRow row = table.rows[i];
-              printf(" Value %lu: ", row.id);
-              printf("%s\n", row.name.data);
+              UserRow *row = (UserRow *)((char *)curr + sizeof(RowHeader) + size_of_prev);
+              printf(" Value %lu: ", row->id);
+              printf("%s\n", row->name.data);
             }
           }
         }
