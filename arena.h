@@ -6,6 +6,17 @@
 
 #define ARENA_HEADER_SIZE 32
 #define DEFAULT_ALIGN 64
+#ifdef _WIN32
+  #include <windows.h>
+  #define virtual_reserve(reserve_size) VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_NOACCESS);
+  #define virtual_commit(arena, commit_size) VirtualAlloc(arena, commit_size, MEM_COMMIT, PAGE_READWRITE);
+  #define virtual_release(arena, amount) VirtualFree(arena, amount, MEM_RELEASE);
+#else
+  #include <sys/mman.h>
+  #define virtual_reserve(reserve_size) mmap(0, reserve_size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0 );
+  #define virtual_commit(arena, commit_size) mprotect(arena, commit_size, PROT_WRITE | PROT_READ);
+  #define virtual_release(arena, amount) munmap(arena, amount);
+#endif
 
 #define alignof(T) __alignof(T)
 #define AlignPow2(x,b) (((x) + (b) - 1)&(~((b) - 1)))
@@ -23,7 +34,7 @@
 #define GROWING 0x00000001
 
 bool is_power_of_two(int x);
-u64 max(int x, int y);
+u64 get_max(int x, int y);
 
 typedef struct {
   //TODO add next a prev arenas so we can chain them
@@ -60,8 +71,8 @@ void scratch_end(Scratch *scratch);
 //NOTE Arena is itself the memory buffer, it contains it's header which is ARENA_HEADER_SIZE then data section starts after that
 //We do this to avoid having to load a separate address to start allocating into and instead can have mostly contiguous memory in our arena
 Arena *arena_init(u64 commit_size, u64 reserve_size) {
-  Arena *arena = mmap(0, reserve_size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0 );
-  mprotect(arena, commit_size, PROT_WRITE | PROT_READ);
+  Arena *arena = virtual_reserve(reserve_size);
+  virtual_commit(arena, commit_size);
   arena->commit_size = commit_size;
   arena->reserve_size = reserve_size;
   arena->first_free_pos = ARENA_HEADER_SIZE;
@@ -85,7 +96,7 @@ void *arena_push(Arena *arena, size_t size, u64 alignment) {
   u64 pos = AlignPow2(arena->first_free_pos, alignment);
   
   if (pos + size >= arena->commit_size) { 
-    mprotect(arena + pos, arena->commit_size, PROT_READ | PROT_WRITE);
+    virtual_commit(arena + pos, arena->commit_size);
     arena->commited += arena->commit_size;
   }
   
@@ -128,7 +139,7 @@ void arena_destroy(Arena *arena) {
   arena->reserve_size   = 0;
   arena->first_free_pos = 0;
   arena->commited       = 0;
-  munmap(arena, amount_to_unmap);
+  virtual_release(arena, arena->reserve_size);
 }
 
 ///////////////////
@@ -152,7 +163,7 @@ bool is_power_of_two(int x) {
 	return (x & (x-1)) == 0;
 }
 
-u64 max(int x, int y) {
+u64 get_max(int x, int y) {
   return x > y ? x : y;
 }
 
