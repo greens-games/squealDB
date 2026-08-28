@@ -1,10 +1,19 @@
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <stdlib.h>
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
 //TODO:
 // Add some tracking arena? To track my arenas
 // Maybe add some gui thing to see the tracked arenas as well
 #ifndef GOOTS_ARENA_H
 #define GOOTS_ARENA_H
 
-#define ARENA_HEADER_SIZE 32
+
 #define DEFAULT_ALIGN 64
 
 #define alignof(T) __alignof(T)
@@ -24,7 +33,7 @@
 
 bool is_power_of_two(int x);
 u64 max(int x, int y);
-
+#define ARENA_HEADER_SIZE 32
 typedef struct {
   //TODO add next a prev arenas so we can chain them
   u64 reserve_size;
