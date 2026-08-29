@@ -161,6 +161,7 @@ int main() {
   str_8.data = test_s;
   UserTable table = {0};
   table.arena = arena_init(100 * sizeof(UserRow), 100 * sizeof(UserRow));
+
   //TODO: I don't like this
   table.columns[0] = NUMBER;
   table.column_names[0] = string8_from_lit("id");
@@ -179,6 +180,7 @@ int main() {
       arena_pop_to(quick_temp, 0);
     }
     printf("%s", str_8.data);
+
     
     TokenArray token_array = parse_query(token_arena, value_arena, str_8);
     arena_pop_to(arena, 0);

@@ -23,7 +23,7 @@ bool string8_contains_char(String8 str_8, char comparator);
 
 
 
-#ifdef GOOTS_ARENA_IMPL
+#ifdef GOOTS_STRINGS_IMPL
 int string8_len(char *s) {
   char *end = s;
   while (*end != '\0') {
@@ -111,4 +111,4 @@ String8 string8_to_lower(Arena *arena, String8 str_8) {
   }
   return new_str;
 }
-#endif // GOOTS_ARENA_IMPL
+#endif // GOOTS_STRINGS_IMPL
