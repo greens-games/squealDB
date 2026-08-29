@@ -87,13 +87,12 @@ void btree_insert(BTree *btree, BTreeNode *node, int key) {
         //Split the other 2 based on this value into 2 new children
         //Allocate for children of this node
         BTreeNode *new_children = arena_push(btree->arena, sizeof(BTreeNode) * btree->n, alignof(BTreeNode));
-         for (int i = 0;i < curr_node->key_count; ++i) {
-          
-          if (curr_node->kv[i - 1].key > curr_node->kv[i].key) {
-            Data temp = curr_node->kv[i - 1];
-            curr_node->kv[i - 1] = curr_node->kv[i];
-            curr_node->kv[i] = temp;
-          }
+        new_children->kv = arena_push(btree->arena, sizeof(Data) * btree->n - 1, alignof(Data));
+        curr_node->children = new_children;
+        printf("Median Index: %d", median_index);
+        for (int i = 0;i < median_index; ++i) {
+//          curr_node->children[i] = curr_node->kv[i];
+//          printf("Child %d: %d", i, curr_node->children[i]);
         } 
       }
       //add key

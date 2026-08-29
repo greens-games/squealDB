@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include "raylib.h"
 #define GOOTS_ARENA_IMPL
 #include "arena.h"
 #define GOOTS_BTREE_IMPL
@@ -16,9 +15,11 @@ struct List {
 
 
 int main() {
-  Arena *arena = arena_init(RESERVE_SIZE, COMMIT_SIZE);
+  Arena *arena = arena_init(COMMIT_SIZE, RESERVE_SIZE);
+  
   BTree btree = {0};
   btree_init(&btree, 3);
+  
   BTreeNode first_node = {0};
   btree_insert(&btree, &first_node, 12);
   BTreeNode second_node = {0};
@@ -28,6 +29,7 @@ int main() {
   BTreeNode fourth_node = {0};
   btree_insert(&btree, &fourth_node, 25); 
   BTreeNode *curr_node = btree.root;
+  
   for (;;) {
     if (curr_node == NULL) {
       break;

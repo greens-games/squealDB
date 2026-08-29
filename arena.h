@@ -1,7 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <stdlib.h>
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -44,7 +43,6 @@ typedef uint64_t u64;
 
 bool is_power_of_two(int x);
 
-u64 max(int x, int y);
 #define ARENA_HEADER_SIZE 32
 typedef struct {
   //TODO add next a prev arenas so we can chain them
