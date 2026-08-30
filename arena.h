@@ -21,7 +21,7 @@ typedef uint64_t u64;
   #define virtual_release(arena, amount) VirtualFree(arena, amount, MEM_RELEASE);
 #else
   #include <sys/mman.h>
-  #define virtual_reserve(reserve_size) mmap(0, reserve_size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0 );
+  #define virtual_reserve(reserve_size) (Arena *)mmap(0, reserve_size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0 );
   #define virtual_commit(arena, commit_size) mprotect(arena, commit_size, PROT_WRITE | PROT_READ);
   #define virtual_release(arena, amount) munmap(arena, amount);
 #endif
@@ -132,12 +132,7 @@ void arena_pop_to(Arena *arena, u64 pos) {
 }
 
 void arena_pop(Arena *arena, u64 amount) {
-  u64 new_pos = max(0, arena->first_free_pos - amount);
-  if (new_pos < ARENA_HEADER_SIZE) {
-    printf("trying to delete parts of arena header is invalid\n");
-    return;
-  }
-  arena_pop_to(arena, new_pos);
+  arena_pop_to(arena, MAX(ARENA_HEADER_SIZE, arena->first_free_pos - amount));
 }
 
 void arena_destroy(Arena *arena) {

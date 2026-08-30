@@ -13,10 +13,15 @@ struct List {
   int count;
 };
 
+int my_thing(int x, int y) {
+  int a = x + y;
+  int b = x * y;
+  return a + b;
+}
 
 int main() {
   Arena *arena = arena_init(COMMIT_SIZE, RESERVE_SIZE);
-  
+  int yo = my_thing(10, 15);
   BTree btree = {0};
   btree_init(&btree, 3);
   
@@ -35,9 +40,9 @@ int main() {
       break;
     }
     for (int i  = 0; i < curr_node->key_count; ++i) {
-      printf("Keys %d: %d\n", i, curr_node->kv[i].key);
+      printf("Key %d: %d;\t", i, curr_node->kv[i].key);
     }
-    printf("DONE\n");
+    printf("\n-----\n");
     curr_node = curr_node->children;
   }
   

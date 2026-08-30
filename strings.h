@@ -3,6 +3,8 @@
 
 #define EachIndex(it, count) (u64 it = 0; it < (count); it += 1)
 
+//TODO Refactor to no take arenas?
+
 typedef struct {
   char *data;
   u64 size;
