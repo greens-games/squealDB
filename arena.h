@@ -102,24 +102,28 @@ void *arena_push(Arena *arena, size_t size, u64 alignment) {
   //NOTE we align to make sure that the position (in bytes) is some POWER OF 2 for more efficient memory access
   //TODO I don't think this works how I think but for now it should be fine we really gotta figure out alignment better
   u64 pos = AlignPow2(arena->first_free_pos, alignment);
-  
-  if (pos + size >= arena->commit_size) { 
-    virtual_commit(arena + pos, arena->commit_size);
-    arena->commited += arena->commit_size;
+
+  // Commit more pages when the request runs past what is committed so far.
+  // (Previously this compared against commit_size instead of commited, so
+  // every arena panicked once usage passed the first 1KB commit.)
+  if (pos + size > arena->commited) {
+    u64 need = (pos + size) - arena->commited;
+    u64 pages = (need + arena->commit_size - 1) / arena->commit_size;
+    u64 amount = pages * arena->commit_size;
+    if (arena->commited + amount > arena->reserve_size) {
+      fprintf(stderr, "panic: RAN OUT OF MEMORY\n");
+      exit(1);
+    }
+    virtual_commit((char *)arena + arena->commited, amount);
+    arena->commited += amount;
   }
-  
-  if (pos + size <= arena->commit_size) { 
-    //NOTE We have to cast the arena to a char * so we most pos number of bytes instead of pos number of arenas
-    void *ptr = (char *) arena + pos;
-    arena->first_free_pos +=size;
-    memset(ptr, 0, size);
-    //TODO add ASAN UNPOISON
-    return ptr;
-  }
-  
-  //NOTE I don't like return NULL should do something else if we have no memory to return
-  fprintf(stderr, "panic: RAN OUT OF MEMORY\n");
-  exit(1);
+
+  //NOTE We have to cast the arena to a char * so we most pos number of bytes instead of pos number of arenas
+  void *ptr = (char *) arena + pos;
+  arena->first_free_pos = pos + size;
+  memset(ptr, 0, size);
+  //TODO add ASAN UNPOISON
+  return ptr;
 }
 
 void arena_pop_to(Arena *arena, u64 pos) {

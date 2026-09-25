@@ -29,50 +29,20 @@ int main() {
   BTreeNode fourth_node = {0};
   btree_insert(&btree, &fourth_node, 25); 
   BTreeNode *curr_node = btree.root;
+//  btree_search(btree, 3);
   
   for (;;) {
     if (curr_node == NULL) {
       break;
     }
     for (int i  = 0; i < curr_node->key_count; ++i) {
-      printf("Keys %d: %d\n", i, curr_node->kv[i].key);
+      printf("%d:%d\t", i, curr_node->kv[i].key);
     }
-    printf("DONE\n");
     curr_node = curr_node->children;
-  }
-  
-  #if 0
-  InitWindow(980, 620, "Visualizer");
-  List list = {0};
-  for (;;) {
-    if (WindowShouldClose()) {
-      break;
+    if (curr_node != NULL) {
+      printf("\n|\n\t");
     }
-
-    BeginDrawing();
-    ClearBackground(RAYWHITE);
-     BTreeNode *curr_node = btree.root;
-     for (;;) {
-      if (curr_node == NULL) {
-        break;
-      }
-      int offset = 12;
-      int base_x = 100;
-      int base_y = 100;
-      DrawRectangle(base_x, base_y, 96, 48, RED);
-      for (int i  = 0; i < curr_node->key_count; ++i) {
-          char *buff = arena_push(arena, sizeof(char) * 10, alignof(char));
-          sprintf(buff, "%d,", curr_node->kv[i].key);
-          DrawText(buff, base_x + offset, base_y + 12, 24, BLACK);
-          offset += 24;
-      }
-      curr_node = curr_node->children;
-    }
-
-    EndDrawing();
-    arena_pop_to(arena, 0);
   }
-  #endif
   
   return 0;
 }
