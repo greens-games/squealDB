@@ -5,7 +5,6 @@
 #include "btree.h"
 
 
-#define STRING_JUMP 10
 
 typedef struct List List;
 struct List {
